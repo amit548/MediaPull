@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Save } from "lucide-react";
+import { Settings, Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,14 +20,10 @@ export default function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const [cookies, setCookies] = useState("");
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
-    setStatus(null);
     try {
       const res = await fetch("http://localhost:4000/api/settings/cookies", {
         method: "POST",
@@ -60,17 +57,42 @@ export default function SettingsDialog() {
         throw new Error(errorMessage);
       }
 
-      setStatus({ type: "success", message: "Cookies saved successfully!" });
-      setTimeout(() => setOpen(false), 1500);
+      toast.success("Cookies saved successfully!");
+      setOpen(false);
     } catch (error) {
       console.error("Error saving cookies:", error);
-      setStatus({
-        type: "error",
-        message:
-          error instanceof Error ? error.message : "Failed to save cookies",
-      });
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save cookies"
+      );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleClear = async () => {
+    if (!confirm("Are you sure you want to clear all stored cookies?")) return;
+
+    setClearing(true);
+    try {
+      const res = await fetch("http://localhost:4000/api/settings/cookies", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: "" }),
+      });
+
+      if (!res.ok) throw new Error("Failed to clear cookies");
+
+      setCookies("");
+      toast.success("Cookies cleared successfully!");
+    } catch (error) {
+      console.error("Error clearing cookies:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to clear cookies"
+      );
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -109,27 +131,35 @@ export default function SettingsDialog() {
             />
           </div>
         </div>
-        <DialogFooter className="flex-col items-end! gap-2">
-          {status && (
-            <div
-              className={`text-sm font-medium ${
-                status.type === "success"
-                  ? "text-green-600"
-                  : "text-destructive"
-              }`}
+        <DialogFooter className="flex-col items-stretch sm:items-end gap-3 sm:gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={handleClear}
+              disabled={clearing || saving}
+              className="text-destructive hover:bg-destructive/10"
             >
-              {status.message}
-            </div>
-          )}
-          <Button onClick={handleSave} disabled={saving || !cookies}>
-            {saving ? (
-              <>Saving...</>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" /> Save Settings
-              </>
-            )}
-          </Button>
+              {clearing ? (
+                "Clearing..."
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" /> Clear Stored Cookies
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={saving || !cookies || clearing}
+            >
+              {saving ? (
+                <>Saving...</>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" /> Save Settings
+                </>
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

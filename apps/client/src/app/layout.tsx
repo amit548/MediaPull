@@ -20,6 +20,8 @@ export const metadata: Metadata = {
   description: "Premium YouTube Video & Playlist Downloader",
 };
 
+import { Toaster } from "@/components/ui/sonner";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,6 +34,7 @@ export default function RootLayout({
       >
         <Providers>
           <div className="flex-1 flex flex-col">{children}</div>
+          <Toaster position="top-center" richColors />
         </Providers>
         <Footer />
       </body>

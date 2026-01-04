@@ -194,9 +194,12 @@ app.get("/api/download", async (req: Request, res: Response) => {
 
   console.log(`[DEBUG] Final Sanitized Filename: ${sanitizedTitle}.${ext}`);
 
+  const fullFilename = `${sanitizedTitle}.${ext}`;
+  const encodedFilename = encodeURIComponent(fullFilename);
+
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${sanitizedTitle}.${ext}"`
+    `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`
   );
 
   const cookies = getCookiePath();

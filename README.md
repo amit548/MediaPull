@@ -45,8 +45,8 @@ A modern, high-performance YouTube downloader built with a Next.js frontend and 
 1. Clone the repository:
 
    ```bash
-   git clone <repository-url>
-   cd youtube_downloader
+   git clone https://github.com/amit548/MediaPull.git
+   cd MediaPull
    ```
 
 2. Install dependencies:

@@ -1,18 +1,14 @@
 {
-  "name": "youtube_downloader_monorepo",
+  "name": "youtube_downloader",
   "version": "0.0.0",
   "private": true,
   "packageManager": "npm@10.9.2",
   "scripts": {
-    "dev": "turbo run dev",
-    "start": "turbo run start",
-    "build": "turbo run build",
-    "lint": "turbo run lint"
+    "dev": "concurrently \"npm run dev --prefix apps/server\" \"npm run dev --prefix apps/client\"",
+    "start": "concurrently \"npm run start --prefix apps/server\" \"npm run start --prefix apps/client\"",
+    "build": "npm run build --prefix apps/client && npm run build --prefix apps/server"
   },
   "devDependencies": {
-    "turbo": "latest"
-  },
-  "workspaces": [
-    "apps/*"
-  ]
+    "concurrently": "^9.0.0"
+  }
 }

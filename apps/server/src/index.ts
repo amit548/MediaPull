@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
 import archiver from "archiver";
+import os from "os";
 
 const app = express();
 const PORT = 4000;
@@ -259,10 +260,14 @@ app.post("/api/download/batch", async (req: Request, res: Response) => {
     titles: titlesRaw,
     format = "best",
     addPrefix: addPrefixRaw,
+    concurrentFragments: concurrentFragmentsRaw,
   } = req.body;
 
   const urls = Array.isArray(urlsRaw) ? (urlsRaw as string[]) : [];
   const titles = Array.isArray(titlesRaw) ? (titlesRaw as string[]) : [];
+
+  const concurrentFragments =
+    parseInt(String(concurrentFragmentsRaw || "4"), 10) || 4;
 
   if (urls.length === 0) {
     res.status(400).json({ error: "No URLs provided" });
@@ -292,9 +297,7 @@ app.post("/api/download/batch", async (req: Request, res: Response) => {
     return;
   }
 
-  const playlistName = (req.body.playlistName as string) || "mediapull_batch";
-
-  let sanitizedPlaylistName = playlistName
+  let sanitizedPlaylistName = (req.body.playlistName || "")
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
     .trim();
 
@@ -344,15 +347,24 @@ app.post("/api/download/batch", async (req: Request, res: Response) => {
       ext = "mp3";
     }
 
-    const filename = `${sanitizedTitle}.${ext}`;
+    let filename = `${sanitizedTitle}.${ext}`;
 
-    console.log(`[BATCH] Adding to ZIP: ${filename}`);
+    if (addPrefixRaw === "true") {
+      const prefix = String(i + 1).padStart(2, "0");
+      filename = `${prefix} - ${filename}`;
+    }
+
+    console.log(`[BATCH] Processing ${i + 1}/${urls.length}: ${filename}`);
 
     const args = [
       "-f",
       format,
       "-o",
       "-",
+      "-N",
+      String(concurrentFragments),
+      "-P",
+      `temp:${os.tmpdir()}`,
       "--extractor-args",
       "youtubetab:skip=authcheck",
       url,
@@ -361,20 +373,33 @@ app.post("/api/download/batch", async (req: Request, res: Response) => {
       args.push("--cookies", cookies);
     }
 
-    const child = spawn(finalBinaryPath, args);
+    try {
+      const child = spawn(finalBinaryPath, args);
 
-    archive.append(child.stdout, { name: filename });
+      archive.append(child.stdout, { name: filename });
 
-    child.on("error", (err) => {
-      console.error(`[BATCH] Error spawning yt-dlp for ${filename}:`, err);
-    });
-
-    await new Promise((resolve) => {
-      child.on("close", (code) => {
-        console.log(`[BATCH] Finished ${filename} with code ${code}`);
-        resolve(null);
+      child.stderr.on("data", (data) => {
+        // console.error(`[yt-dlp stderr] ${data}`);
       });
-    });
+
+      await new Promise<void>((resolve, reject) => {
+        child.on("close", (code) => {
+          if (code === 0) {
+            console.log(`[BATCH] Finished ${filename}`);
+            resolve();
+          } else {
+            console.error(`[BATCH] Failed ${filename} code ${code}`);
+            resolve();
+          }
+        });
+        child.on("error", (err) => {
+          console.error(`[BATCH] Spawn error ${filename}`, err);
+          resolve();
+        });
+      });
+    } catch (err) {
+      console.error(`[BATCH] Loop error ${filename}`, err);
+    }
   }
 
   console.log("[BATCH] Finalizing archive");

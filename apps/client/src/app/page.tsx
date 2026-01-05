@@ -60,6 +60,7 @@ export default function Home() {
   const [bulkFormat, setBulkFormat] = useState("best");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [addPrefix, setAddPrefix] = useState(false);
+  const [concurrentFragments, setConcurrentFragments] = useState(4);
 
   const handleSearch = async (url: string) => {
     setLoading(true);
@@ -192,6 +193,12 @@ export default function Home() {
     prefixInput.value = String(addPrefix);
     form.appendChild(prefixInput);
 
+    const fragmentsInput = document.createElement("input");
+    fragmentsInput.type = "hidden";
+    fragmentsInput.name = "concurrentFragments";
+    fragmentsInput.value = String(concurrentFragments);
+    form.appendChild(fragmentsInput);
+
     document.body.appendChild(form);
     form.submit();
 
@@ -232,7 +239,12 @@ export default function Home() {
   return (
     <main className="bg-background text-foreground py-12 px-4 transition-colors duration-300 relative animate-fade-in">
       <div className="absolute top-4 right-4 flex items-center gap-2">
-        <SettingsDialog addPrefix={addPrefix} setAddPrefix={setAddPrefix} />
+        <SettingsDialog
+          addPrefix={addPrefix}
+          setAddPrefix={setAddPrefix}
+          concurrentFragments={concurrentFragments}
+          setConcurrentFragments={setConcurrentFragments}
+        />
         <ThemeToggle />
       </div>
       <div className="max-w-5xl mx-auto flex flex-col items-center">

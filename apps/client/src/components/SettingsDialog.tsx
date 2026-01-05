@@ -20,11 +20,15 @@ import { Textarea } from "@/components/ui/textarea";
 interface SettingsDialogProps {
   addPrefix: boolean;
   setAddPrefix: (val: boolean) => void;
+  concurrentFragments: number;
+  setConcurrentFragments: (val: number) => void;
 }
 
 export default function SettingsDialog({
   addPrefix,
   setAddPrefix,
+  concurrentFragments,
+  setConcurrentFragments,
 }: SettingsDialogProps) {
   const [open, setOpen] = useState(false);
   const [cookies, setCookies] = useState("");
@@ -141,6 +145,31 @@ export default function SettingsDialog({
                 &quot;, etc.
               </p>
             </div>
+          </div>
+
+          <div className="grid gap-2 border-b pb-4 mb-2">
+            <Label htmlFor="fragments" className="text-left">
+              Download Speed / Parallel Connections
+            </Label>
+            <div className="flex items-center gap-4">
+              <input
+                id="fragments"
+                type="range"
+                min="1"
+                max="16"
+                step="1"
+                value={concurrentFragments}
+                onChange={(e) => setConcurrentFragments(Number(e.target.value))}
+                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+              <span className="font-mono text-sm w-8 text-right">
+                {concurrentFragments}x
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Higher values increase speed but use more CPU/Bandwidth. Default
+              is 4.
+            </p>
           </div>
 
           <div className="grid gap-2">

@@ -45,3 +45,9 @@ apps/server/cookies.txt
 *.mp3
 *.m4a
 downloads/
+
+# Download Fragments
+*.part
+*.ytdl
+--Frag*
+

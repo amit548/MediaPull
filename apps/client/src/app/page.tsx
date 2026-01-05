@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import SearchBar from "@/components/SearchBar";
 import VideoInfo from "@/components/VideoInfo";
 import FormatSelector from "@/components/FormatSelector";
@@ -42,6 +43,7 @@ interface VideoData {
 
 import ThemeToggle from "@/components/ThemeToggle";
 import SettingsDialog from "@/components/SettingsDialog";
+import BatchProgress from "@/components/BatchProgress";
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
@@ -61,6 +63,9 @@ export default function Home() {
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [addPrefix, setAddPrefix] = useState(false);
   const [concurrentFragments, setConcurrentFragments] = useState(4);
+
+  const [batchJobId, setBatchJobId] = useState<string | null>(null);
+  const [showBatchProgress, setShowBatchProgress] = useState(false);
 
   const handleSearch = async (url: string) => {
     setLoading(true);
@@ -133,7 +138,7 @@ export default function Home() {
     setSelectedVideoIds(new Set());
   };
 
-  const handleBulkDownload = (format = "best") => {
+  const handleBulkDownload = async (format = "best") => {
     if (!data?.entries) return;
     const selectedEntries = data.entries.filter((e, idx) =>
       selectedVideoIds.has(e.id || String(idx))
@@ -143,69 +148,39 @@ export default function Home() {
 
     setIsBulkDownloading(true);
 
-    console.log(
-      `[DEBUG] Starting ZIP bulk download for ${selectedEntries.length} items`
-    );
+    try {
+      const payload = {
+        urls: selectedEntries.map((e) => e.url || e.webpage_url || ""),
+        titles: selectedEntries.map((e) => e.title || ""),
+        format: format,
+        playlistName: data?.title || "mediapull_batch",
+        addPrefix: addPrefix,
+        concurrentFragments: concurrentFragments,
+      };
 
-    const queryParams = new URLSearchParams();
-    selectedEntries.forEach((entry) => {
-      queryParams.append("urls", entry.url || entry.webpage_url || "");
-      queryParams.append("titles", entry.title || "");
-    });
-    queryParams.append("format", format);
+      const res = await fetch("http://localhost:4000/api/batch/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    const downloadUrl = `http://localhost:4000/api/download/batch`;
+      if (!res.ok) throw new Error("Failed to init batch job");
 
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = downloadUrl;
-    form.style.display = "none";
+      const { jobId } = await res.json();
+      setBatchJobId(jobId);
+      setShowBatchProgress(true);
 
-    selectedEntries.forEach((entry) => {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "urls[]";
-      input.value = entry.url || entry.webpage_url || "";
-      form.appendChild(input);
+      await fetch(`http://localhost:4000/api/batch/resume/${jobId}`, {
+        method: "POST",
+      });
 
-      const titleInput = document.createElement("input");
-      titleInput.type = "hidden";
-      titleInput.name = "titles[]";
-      titleInput.value = entry.title || "";
-      form.appendChild(titleInput);
-    });
-
-    const formatInput = document.createElement("input");
-    formatInput.type = "hidden";
-    formatInput.name = "format";
-    formatInput.value = format;
-    form.appendChild(formatInput);
-
-    const playlistNameInput = document.createElement("input");
-    playlistNameInput.type = "hidden";
-    playlistNameInput.name = "playlistName";
-    playlistNameInput.value = data?.title || "mediapull_batch";
-    form.appendChild(playlistNameInput);
-
-    const prefixInput = document.createElement("input");
-    prefixInput.type = "hidden";
-    prefixInput.name = "addPrefix";
-    prefixInput.value = String(addPrefix);
-    form.appendChild(prefixInput);
-
-    const fragmentsInput = document.createElement("input");
-    fragmentsInput.type = "hidden";
-    fragmentsInput.name = "concurrentFragments";
-    fragmentsInput.value = String(concurrentFragments);
-    form.appendChild(fragmentsInput);
-
-    document.body.appendChild(form);
-    form.submit();
-
-    setTimeout(() => {
-      document.body.removeChild(form);
+      toast.success("Batch job initialized!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to start batch download");
+    } finally {
       setIsBulkDownloading(false);
-    }, 4000);
+    }
   };
   const handleDownload = (
     formatId: string,
@@ -246,6 +221,11 @@ export default function Home() {
           setConcurrentFragments={setConcurrentFragments}
         />
         <ThemeToggle />
+        <BatchProgress
+          jobId={batchJobId}
+          open={showBatchProgress}
+          onOpenChange={setShowBatchProgress}
+        />
       </div>
       <div className="max-w-5xl mx-auto flex flex-col items-center">
         <h1 className="text-4xl md:text-6xl font-extrabold text-foreground mb-2 text-center">

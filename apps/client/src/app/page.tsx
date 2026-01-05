@@ -58,6 +58,7 @@ export default function Home() {
     new Set()
   );
   const [bulkFormat, setBulkFormat] = useState("best");
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   const handleSearch = async (url: string) => {
     setLoading(true);
@@ -130,18 +131,68 @@ export default function Home() {
     setSelectedVideoIds(new Set());
   };
 
-  const handleBulkDownload = async (format = "best") => {
+  const handleBulkDownload = (format = "best") => {
     if (!data?.entries) return;
     const selectedEntries = data.entries.filter((e, idx) =>
       selectedVideoIds.has(e.id || String(idx))
     );
 
-    for (const entry of selectedEntries) {
-      handleDownload(format, entry.url || entry.webpage_url, entry.title);
-      await new Promise((r) => setTimeout(r, 800));
-    }
-  };
+    if (selectedEntries.length === 0) return;
 
+    setIsBulkDownloading(true);
+
+    console.log(
+      `[DEBUG] Starting ZIP bulk download for ${selectedEntries.length} items`
+    );
+
+    const queryParams = new URLSearchParams();
+    selectedEntries.forEach((entry) => {
+      queryParams.append("urls", entry.url || entry.webpage_url || "");
+      queryParams.append("titles", entry.title || "");
+    });
+    queryParams.append("format", format);
+
+    const downloadUrl = `http://localhost:4000/api/download/batch`;
+
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = downloadUrl;
+    form.style.display = "none";
+
+    selectedEntries.forEach((entry) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "urls[]";
+      input.value = entry.url || entry.webpage_url || "";
+      form.appendChild(input);
+
+      const titleInput = document.createElement("input");
+      titleInput.type = "hidden";
+      titleInput.name = "titles[]";
+      titleInput.value = entry.title || "";
+      form.appendChild(titleInput);
+    });
+
+    const formatInput = document.createElement("input");
+    formatInput.type = "hidden";
+    formatInput.name = "format";
+    formatInput.value = format;
+    form.appendChild(formatInput);
+
+    const playlistNameInput = document.createElement("input");
+    playlistNameInput.type = "hidden";
+    playlistNameInput.name = "playlistName";
+    playlistNameInput.value = data?.title || "mediapull_batch";
+    form.appendChild(playlistNameInput);
+
+    document.body.appendChild(form);
+    form.submit();
+
+    setTimeout(() => {
+      document.body.removeChild(form);
+      setIsBulkDownloading(false);
+    }, 4000);
+  };
   const handleDownload = (
     formatId: string,
     urlOverride?: string,
@@ -151,11 +202,24 @@ export default function Home() {
     if (!videoUrl) return;
 
     const title = titleOverride || data?.title || "video";
-    console.log(`[DEBUG] Requesting download: ${title} (${formatId})`);
-
-    window.location.href = `http://localhost:4000/api/download?url=${encodeURIComponent(
+    const downloadUrl = `http://localhost:4000/api/download?url=${encodeURIComponent(
       videoUrl
     )}&format=${formatId}&title=${encodeURIComponent(title)}`;
+
+    console.log(`[DEBUG] Triggering download: ${title} (${formatId})`);
+
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.setAttribute("download", "");
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => {
+      document.body.removeChild(a);
+    }, 200);
   };
 
   return (
@@ -213,43 +277,54 @@ export default function Home() {
                     </div>
 
                     {selectedVideoIds.size > 0 && (
-                      <div className="flex items-center gap-3 animate-fade-in w-full sm:w-auto">
-                        <Select
-                          value={bulkFormat}
-                          onValueChange={setBulkFormat}
-                        >
-                          <SelectTrigger className="w-[180px] h-9">
-                            <SelectValue placeholder="Quality" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="best">
-                              Best Quality (Auto)
-                            </SelectItem>
-                            <SelectItem value="bestvideo[height<=2160]+bestaudio/best[height<=2160]">
-                              4K (2160p)
-                            </SelectItem>
-                            <SelectItem value="bestvideo[height<=1440]+bestaudio/best[height<=1440]">
-                              2K (1440p)
-                            </SelectItem>
-                            <SelectItem value="bestvideo[height<=1080]+bestaudio/best[height<=1080]">
-                              1080p (HD)
-                            </SelectItem>
-                            <SelectItem value="bestvideo[height<=720]+bestaudio/best[height<=720]">
-                              720p (HD)
-                            </SelectItem>
-                            <SelectItem value="bestaudio">
-                              Audio Only
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          onClick={() => handleBulkDownload(bulkFormat)}
-                          size="sm"
-                          className="gap-2"
-                        >
-                          <Download className="w-4 h-4" />
-                          Download ({selectedVideoIds.size})
-                        </Button>
+                      <div className="flex flex-col sm:flex-row items-center gap-3 animate-fade-in w-full sm:w-auto">
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <Select
+                            value={bulkFormat}
+                            onValueChange={setBulkFormat}
+                            disabled={isBulkDownloading}
+                          >
+                            <SelectTrigger className="w-[180px] h-9">
+                              <SelectValue placeholder="Quality" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="best">
+                                Best Quality (Auto)
+                              </SelectItem>
+                              <SelectItem value="bestvideo[height<=2160]+bestaudio/best[height<=2160]">
+                                4K (2160p)
+                              </SelectItem>
+                              <SelectItem value="bestvideo[height<=1440]+bestaudio/best[height<=1440]">
+                                2K (1440p)
+                              </SelectItem>
+                              <SelectItem value="bestvideo[height<=1080]+bestaudio/best[height<=1080]">
+                                1080p (HD)
+                              </SelectItem>
+                              <SelectItem value="bestvideo[height<=720]+bestaudio/best[height<=720]">
+                                720p (HD)
+                              </SelectItem>
+                              <SelectItem value="bestaudio">
+                                Audio Only
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            onClick={() => handleBulkDownload(bulkFormat)}
+                            size="sm"
+                            className="gap-2"
+                            disabled={isBulkDownloading}
+                          >
+                            <Download className="w-4 h-4" />
+                            {isBulkDownloading
+                              ? "Preparing ZIP..."
+                              : `Download (${selectedVideoIds.size})`}
+                          </Button>
+                        </div>
+                        {isBulkDownloading && (
+                          <div className="w-full sm:w-48 h-2 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-primary animate-pulse w-full" />
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>

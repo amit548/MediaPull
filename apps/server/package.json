@@ -12,6 +12,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/archiver": "^7.0.0",
+    "archiver": "^7.0.1",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "youtube-dl-exec": "^3.0.28"

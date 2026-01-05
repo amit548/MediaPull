@@ -4,12 +4,19 @@ import youtubedl from "youtube-dl-exec";
 import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
+import archiver from "archiver";
 
 const app = express();
 const PORT = 4000;
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+    exposedHeaders: ["Content-Disposition"],
+  })
+);
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 interface YtFlags {
   dumpSingleJson?: boolean;
@@ -179,7 +186,10 @@ app.get("/api/download", async (req: Request, res: Response) => {
   }
 
   const title = (req.query.title as string) || "video";
-  console.log(`Downloading: ${url}, Title: ${title}, Format: ${format}`);
+  const timestamp = new Date().toISOString();
+  console.log(
+    `[${timestamp}] Incoming download request: ${url}, Title: ${title}, Format: ${format}`
+  );
 
   let sanitizedTitle = title.replace(/\s*[<>:"/\\|?*]+\s*/g, "_").trim();
 
@@ -241,6 +251,129 @@ app.get("/api/download", async (req: Request, res: Response) => {
       res.status(500).json({ error: errorMessage });
     }
   });
+});
+
+app.post("/api/download/batch", async (req: Request, res: Response) => {
+  const { urls: urlsRaw, titles: titlesRaw, format = "best" } = req.body;
+
+  const urls = Array.isArray(urlsRaw) ? (urlsRaw as string[]) : [];
+  const titles = Array.isArray(titlesRaw) ? (titlesRaw as string[]) : [];
+
+  if (urls.length === 0) {
+    res.status(400).json({ error: "No URLs provided" });
+    return;
+  }
+
+  const binaryPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "youtube-dl-exec",
+    "bin",
+    "yt-dlp.exe"
+  );
+
+  const finalBinaryPath = fs.existsSync(binaryPath)
+    ? binaryPath
+    : path.join(
+        process.cwd(),
+        "../../node_modules",
+        "youtube-dl-exec",
+        "bin",
+        "yt-dlp.exe"
+      );
+
+  if (!fs.existsSync(finalBinaryPath)) {
+    res.status(500).json({ error: "yt-dlp binary not found" });
+    return;
+  }
+
+  const playlistName = (req.body.playlistName as string) || "mediapull_batch";
+
+  let sanitizedPlaylistName = playlistName
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
+    .trim();
+
+  if (
+    !sanitizedPlaylistName ||
+    sanitizedPlaylistName === "." ||
+    sanitizedPlaylistName === ".."
+  ) {
+    sanitizedPlaylistName = "mediapull_batch";
+  }
+
+  if (sanitizedPlaylistName.length > 100) {
+    sanitizedPlaylistName = sanitizedPlaylistName.substring(0, 100);
+  }
+
+  const zipFilename = `${sanitizedPlaylistName}.zip`;
+  const encodedZipFilename = encodeURIComponent(zipFilename);
+
+  console.log(
+    `[BATCH] Starting download for ${urls.length} items as ZIP: ${zipFilename}`
+  );
+
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${encodedZipFilename}"; filename*=UTF-8''${encodedZipFilename}`
+  );
+
+  const archive = archiver("zip", { zlib: { level: 5 } });
+
+  archive.on("error", (err) => {
+    console.error("Archive error:", err);
+  });
+
+  archive.pipe(res);
+
+  const cookies = getCookiePath();
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    const title = titles[i] || `video_${i}`;
+    let sanitizedTitle = title.replace(/\s*[<>:"/\\|?*]+\s*/g, "_").trim();
+    if (!sanitizedTitle) sanitizedTitle = `video_${i}`;
+
+    let ext = "mp4";
+    if (format.includes("audio")) {
+      ext = "mp3";
+    }
+
+    const filename = `${sanitizedTitle}.${ext}`;
+
+    console.log(`[BATCH] Adding to ZIP: ${filename}`);
+
+    const args = [
+      "-f",
+      format,
+      "-o",
+      "-",
+      "--extractor-args",
+      "youtubetab:skip=authcheck",
+      url,
+    ];
+    if (cookies) {
+      args.push("--cookies", cookies);
+    }
+
+    const child = spawn(finalBinaryPath, args);
+
+    archive.append(child.stdout, { name: filename });
+
+    child.on("error", (err) => {
+      console.error(`[BATCH] Error spawning yt-dlp for ${filename}:`, err);
+    });
+
+    await new Promise((resolve) => {
+      child.on("close", (code) => {
+        console.log(`[BATCH] Finished ${filename} with code ${code}`);
+        resolve(null);
+      });
+    });
+  }
+
+  console.log("[BATCH] Finalizing archive");
+  await archive.finalize();
 });
 
 app.listen(PORT, () => {

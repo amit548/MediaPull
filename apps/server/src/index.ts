@@ -254,7 +254,12 @@ app.get("/api/download", async (req: Request, res: Response) => {
 });
 
 app.post("/api/download/batch", async (req: Request, res: Response) => {
-  const { urls: urlsRaw, titles: titlesRaw, format = "best" } = req.body;
+  const {
+    urls: urlsRaw,
+    titles: titlesRaw,
+    format = "best",
+    addPrefix: addPrefixRaw,
+  } = req.body;
 
   const urls = Array.isArray(urlsRaw) ? (urlsRaw as string[]) : [];
   const titles = Array.isArray(titlesRaw) ? (titlesRaw as string[]) : [];

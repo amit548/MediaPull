@@ -14,9 +14,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 
-export default function SettingsDialog() {
+interface SettingsDialogProps {
+  addPrefix: boolean;
+  setAddPrefix: (val: boolean) => void;
+}
+
+export default function SettingsDialog({
+  addPrefix,
+  setAddPrefix,
+}: SettingsDialogProps) {
   const [open, setOpen] = useState(false);
   const [cookies, setCookies] = useState("");
   const [saving, setSaving] = useState(false);
@@ -112,6 +121,28 @@ export default function SettingsDialog() {
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          <div className="flex items-center space-x-2 border-b pb-4 mb-2">
+            <Checkbox
+              id="addPrefix"
+              checked={addPrefix}
+              onCheckedChange={(checked: boolean) =>
+                setAddPrefix(checked as boolean)
+              }
+            />
+            <div className="grid gap-1.5 leading-none">
+              <label
+                htmlFor="addPrefix"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Number Videos in Playlists
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Prefix downloaded video files with &quot;01 - &quot;, &quot;02 -
+                &quot;, etc.
+              </p>
+            </div>
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="cookies" className="text-left">
               YouTube Cookies (Netscape Format)

@@ -59,6 +59,7 @@ export default function Home() {
   );
   const [bulkFormat, setBulkFormat] = useState("best");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  const [addPrefix, setAddPrefix] = useState(false);
 
   const handleSearch = async (url: string) => {
     setLoading(true);
@@ -185,6 +186,12 @@ export default function Home() {
     playlistNameInput.value = data?.title || "mediapull_batch";
     form.appendChild(playlistNameInput);
 
+    const prefixInput = document.createElement("input");
+    prefixInput.type = "hidden";
+    prefixInput.name = "addPrefix";
+    prefixInput.value = String(addPrefix);
+    form.appendChild(prefixInput);
+
     document.body.appendChild(form);
     form.submit();
 
@@ -225,7 +232,7 @@ export default function Home() {
   return (
     <main className="bg-background text-foreground py-12 px-4 transition-colors duration-300 relative animate-fade-in">
       <div className="absolute top-4 right-4 flex items-center gap-2">
-        <SettingsDialog />
+        <SettingsDialog addPrefix={addPrefix} setAddPrefix={setAddPrefix} />
         <ThemeToggle />
       </div>
       <div className="max-w-5xl mx-auto flex flex-col items-center">
@@ -267,68 +274,70 @@ export default function Home() {
                         <CheckSquare className="w-4 h-4 mr-2" /> Select All
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={deselectAll}
-                        className="h-8"
+                        disabled={selectedVideoIds.size === 0}
                       >
-                        <X className="w-4 h-4 mr-2" /> Deselect All
+                        <X className="mr-2 h-4 w-4" /> Deselect All
                       </Button>
                     </div>
-
-                    {selectedVideoIds.size > 0 && (
-                      <div className="flex flex-col sm:flex-row items-center gap-3 animate-fade-in w-full sm:w-auto">
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                          <Select
-                            value={bulkFormat}
-                            onValueChange={setBulkFormat}
-                            disabled={isBulkDownloading}
-                          >
-                            <SelectTrigger className="w-[180px] h-9">
-                              <SelectValue placeholder="Quality" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="best">
-                                Best Quality (Auto)
-                              </SelectItem>
-                              <SelectItem value="bestvideo[height<=2160]+bestaudio/best[height<=2160]">
-                                4K (2160p)
-                              </SelectItem>
-                              <SelectItem value="bestvideo[height<=1440]+bestaudio/best[height<=1440]">
-                                2K (1440p)
-                              </SelectItem>
-                              <SelectItem value="bestvideo[height<=1080]+bestaudio/best[height<=1080]">
-                                1080p (HD)
-                              </SelectItem>
-                              <SelectItem value="bestvideo[height<=720]+bestaudio/best[height<=720]">
-                                720p (HD)
-                              </SelectItem>
-                              <SelectItem value="bestaudio">
-                                Audio Only
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            onClick={() => handleBulkDownload(bulkFormat)}
-                            size="sm"
-                            className="gap-2"
-                            disabled={isBulkDownloading}
-                          >
-                            <Download className="w-4 h-4" />
-                            {isBulkDownloading
-                              ? "Preparing ZIP..."
-                              : `Download (${selectedVideoIds.size})`}
-                          </Button>
-                        </div>
-                        {isBulkDownloading && (
-                          <div className="w-full sm:w-48 h-2 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-primary animate-pulse w-full" />
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
+
+                <div className="flex flex-col sm:flex-row gap-4 items-center bg-card p-4 rounded-lg border shadow-sm">
+                  {selectedVideoIds.size > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center gap-3 animate-fade-in w-full sm:w-auto">
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <Select
+                          value={bulkFormat}
+                          onValueChange={setBulkFormat}
+                          disabled={isBulkDownloading}
+                        >
+                          <SelectTrigger className="w-[180px] h-9">
+                            <SelectValue placeholder="Quality" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="best">
+                              Best Quality (Auto)
+                            </SelectItem>
+                            <SelectItem value="bestvideo[height<=2160]+bestaudio/best[height<=2160]">
+                              4K (2160p)
+                            </SelectItem>
+                            <SelectItem value="bestvideo[height<=1440]+bestaudio/best[height<=1440]">
+                              2K (1440p)
+                            </SelectItem>
+                            <SelectItem value="bestvideo[height<=1080]+bestaudio/best[height<=1080]">
+                              1080p (HD)
+                            </SelectItem>
+                            <SelectItem value="bestvideo[height<=720]+bestaudio/best[height<=720]">
+                              720p (HD)
+                            </SelectItem>
+                            <SelectItem value="bestaudio">
+                              Audio Only
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          onClick={() => handleBulkDownload(bulkFormat)}
+                          size="sm"
+                          className="gap-2"
+                          disabled={isBulkDownloading}
+                        >
+                          <Download className="w-4 h-4" />
+                          {isBulkDownloading
+                            ? "Preparing ZIP..."
+                            : `Download (${selectedVideoIds.size})`}
+                        </Button>
+                      </div>
+                      {isBulkDownloading && (
+                        <div className="w-full sm:w-48 h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary animate-pulse w-full" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="columns-1 md:columns-2 lg:columns-3 gap-4 space-y-4">
                   {data.entries.map((entry, idx) => {

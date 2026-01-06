@@ -23,8 +23,7 @@
   "dependencies": {
     "archiver": "^7.0.1",
     "better-sqlite3": "^12.5.0",
-    "electron-squirrel-startup": "^1.0.1",
-    "youtube_downloader": "file:../.."
+    "electron-squirrel-startup": "^1.0.1"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.10.2",

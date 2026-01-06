@@ -3,9 +3,7 @@ const { FuseV1Options, FuseVersion } = require("@electron/fuses");
 
 module.exports = {
   packagerConfig: {
-    asar: {
-      unpack: "**/node_modules/youtube-dl-exec/**",
-    },
+    asar: {},
     name: "MediaPull",
     executableName: "MediaPull",
     extraResource: ["../../apps/client/out", "./bin"],

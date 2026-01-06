@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import { spawn, ChildProcess } from "child_process";
 import { app, BrowserWindow, shell } from "electron";
-import youtubedl from "youtube-dl-exec";
+
 import { dbStore } from "./Database";
 
 const LEGACY_JSON_PATH = path.join(app.getPath("userData"), "jobs.json");
@@ -436,14 +436,40 @@ export function saveCookies(content: string) {
 }
 
 export async function videoInfo(url: string) {
-  const ytCreator = (youtubedl as any).create;
-  const yt = ytCreator(getYtDlpPath());
+  const binary = getYtDlpPath();
+  const cookies = getCookiePath();
 
-  return yt(url, {
-    dumpSingleJson: true,
-    noWarnings: true,
-    flatPlaylist: true,
-    extractorArgs: "youtubetab:skip=authcheck",
-    cookies: getCookiePath(),
+  const args = [
+    url,
+    "--dump-single-json",
+    "--no-warnings",
+    "--flat-playlist",
+    "--extractor-args",
+    "youtubetab:skip=authcheck",
+  ];
+
+  if (cookies) {
+    args.push("--cookies", cookies);
+  }
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, args);
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (d) => (stdout += d.toString()));
+    child.stderr.on("data", (d) => (stderr += d.toString()));
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        try {
+          resolve(JSON.parse(stdout));
+        } catch (e) {
+          reject(new Error("Failed to parse JSON output from yt-dlp"));
+        }
+      } else {
+        reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`));
+      }
+    });
   });
 }

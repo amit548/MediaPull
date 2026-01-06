@@ -65,21 +65,9 @@ function saveJob(job: Job) {
 
 function getYtDlpPath() {
   if (app.isPackaged) {
-    return path.join(
-      app.getAppPath().replace("app.asar", "app.asar.unpacked"),
-      "node_modules",
-      "youtube-dl-exec",
-      "bin",
-      "yt-dlp.exe"
-    );
+    return path.join(process.resourcesPath, "bin", "yt-dlp.exe");
   }
-  return path.join(
-    process.cwd(),
-    "node_modules",
-    "youtube-dl-exec",
-    "bin",
-    "yt-dlp.exe"
-  );
+  return path.join(app.getAppPath(), "bin", "yt-dlp.exe");
 }
 
 function getCookiePath() {

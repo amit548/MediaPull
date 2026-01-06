@@ -64,10 +64,19 @@ function saveJob(job: Job) {
 }
 
 function getYtDlpPath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, "bin", "yt-dlp.exe");
+  const platform = process.platform;
+  let binName = "yt-dlp";
+  if (platform === "win32") {
+    binName = "yt-dlp.exe";
+  } else if (platform === "darwin") {
+    binName = "yt-dlp_macos";
   }
-  return path.join(app.getAppPath(), "bin", "yt-dlp.exe");
+
+  const binPath = app.isPackaged
+    ? path.join(process.resourcesPath, "bin", binName)
+    : path.join(app.getAppPath(), "bin", binName);
+
+  return binPath;
 }
 
 function getCookiePath() {

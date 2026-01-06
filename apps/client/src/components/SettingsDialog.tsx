@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 
+import { api } from "@/lib/api";
+
 interface SettingsDialogProps {
   addPrefix: boolean;
   setAddPrefix: (val: boolean) => void;
@@ -38,37 +40,7 @@ export default function SettingsDialog({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch("http://localhost:4000/api/settings/cookies", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content: cookies }),
-      });
-
-      if (!res.ok) {
-        let errorMessage = "Failed to save cookies";
-        try {
-          const text = await res.text();
-          if (text) {
-            try {
-              const json = JSON.parse(text);
-              if (json.error) errorMessage = json.error;
-              else errorMessage = text;
-            } catch {
-              if (text.trim().startsWith("<")) {
-                errorMessage = `Server Error (${res.status}): Please restart the backend server to apply updates.`;
-              } else {
-                errorMessage =
-                  text.slice(0, 100) + (text.length > 100 ? "..." : "");
-              }
-            }
-          }
-        } catch (e) {
-          console.error("Error reading error response:", e);
-        }
-        throw new Error(errorMessage);
-      }
+      await api.settings.saveCookies(cookies);
 
       toast.success("Cookies saved successfully!");
       setOpen(false);
@@ -87,15 +59,7 @@ export default function SettingsDialog({
 
     setClearing(true);
     try {
-      const res = await fetch("http://localhost:4000/api/settings/cookies", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content: "" }),
-      });
-
-      if (!res.ok) throw new Error("Failed to clear cookies");
+      await api.settings.saveCookies("");
 
       setCookies("");
       toast.success("Cookies cleared successfully!");

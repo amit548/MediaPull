@@ -18,32 +18,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, Download, CheckSquare, X } from "lucide-react";
 import Image from "next/image";
-
-interface VideoFormat {
-  format_id: string;
-  format_note?: string;
-  ext: string;
-  resolution?: string;
-  filesize?: number;
-  vcodec?: string;
-  acodec?: string;
-}
-
-interface VideoData {
-  title: string;
-  thumbnail: string;
-  duration_string?: string;
-  uploader?: string;
-  formats?: VideoFormat[];
-  entries?: VideoData[];
-  webpage_url?: string;
-  url?: string;
-  id?: string;
-}
+import { api, VideoData, VideoFormat } from "@/lib/api";
 
 import ThemeToggle from "@/components/ThemeToggle";
 import SettingsDialog from "@/components/SettingsDialog";
 import BatchProgress from "@/components/BatchProgress";
+import { DownloadsDialog } from "@/components/DownloadsDialog";
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
@@ -75,15 +55,7 @@ export default function Home() {
     setSelectedVideoIds(new Set());
 
     try {
-      const res = await fetch(
-        `http://localhost:4000/api/info?url=${encodeURIComponent(url)}`
-      );
-      const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to fetch video info");
-      }
-
+      const json = await api.video.getInfo(url);
       setData(json);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -102,13 +74,7 @@ export default function Home() {
     setExpandedVideoFormats(null);
 
     try {
-      const res = await fetch(
-        `http://localhost:4000/api/info?url=${encodeURIComponent(url)}`
-      );
-      const json = await res.json();
-
-      if (!res.ok) throw new Error(json.error);
-
+      const json = await api.video.getInfo(url);
       setExpandedVideoFormats(json.formats || []);
       setExpandedVideoId(id);
     } catch (err) {
@@ -158,21 +124,11 @@ export default function Home() {
         concurrentFragments: concurrentFragments,
       };
 
-      const res = await fetch("http://localhost:4000/api/batch/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error("Failed to init batch job");
-
-      const { jobId } = await res.json();
+      const { jobId } = await api.batch.init(payload);
       setBatchJobId(jobId);
       setShowBatchProgress(true);
 
-      await fetch(`http://localhost:4000/api/batch/resume/${jobId}`, {
-        method: "POST",
-      });
+      await api.batch.resume(jobId);
 
       toast.success("Batch job initialized!");
     } catch (err) {
@@ -182,7 +138,8 @@ export default function Home() {
       setIsBulkDownloading(false);
     }
   };
-  const handleDownload = (
+
+  const handleDownload = async (
     formatId: string,
     urlOverride?: string,
     titleOverride?: string
@@ -191,24 +148,28 @@ export default function Home() {
     if (!videoUrl) return;
 
     const title = titleOverride || data?.title || "video";
-    const downloadUrl = `http://localhost:4000/api/download?url=${encodeURIComponent(
-      videoUrl
-    )}&format=${formatId}&title=${encodeURIComponent(title)}`;
 
-    console.log(`[DEBUG] Triggering download: ${title} (${formatId})`);
+    try {
+      const payload = {
+        urls: [videoUrl],
+        titles: [title],
+        format: formatId,
+        playlistName: title,
+        folder: "",
+        addPrefix: false,
+        concurrentFragments: concurrentFragments,
+      };
 
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.setAttribute("download", "");
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
+      const { jobId } = await api.batch.init(payload);
+      setBatchJobId(jobId);
+      setShowBatchProgress(true);
 
-    setTimeout(() => {
-      document.body.removeChild(a);
-    }, 200);
+      await api.batch.resume(jobId);
+      toast.success("Download started!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to start download");
+    }
   };
 
   return (
@@ -220,6 +181,7 @@ export default function Home() {
           concurrentFragments={concurrentFragments}
           setConcurrentFragments={setConcurrentFragments}
         />
+        <DownloadsDialog />
         <ThemeToggle />
         <BatchProgress
           jobId={batchJobId}

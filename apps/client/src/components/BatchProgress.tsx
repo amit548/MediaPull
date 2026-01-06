@@ -9,33 +9,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Pause,
-  Play,
-  Download,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
+import { Pause, Play, Loader2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
+import { api, JobStatus } from "@/lib/api";
 
 interface BatchProgressProps {
   jobId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-interface JobStatus {
-  id: string;
-  status: "idle" | "downloading" | "paused" | "completed" | "error" | "zipping";
-  error?: string;
-  progress: {
-    total: number;
-    completed: number;
-    currentFileIndex: number;
-    currentSpeed?: string;
-  };
-  files: { filename: string; status: string }[];
 }
 
 export default function BatchProgress({
@@ -51,31 +32,34 @@ export default function BatchProgress({
 
     const poll = async () => {
       try {
-        const res = await fetch(
-          `http://localhost:4000/api/batch/status/${jobId}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setStatus(data);
-        }
-      } catch (err) {
-        console.error("Polling error", err);
-      }
+        const data = await api.batch.getStatus(jobId);
+        setStatus(data);
+      } catch {}
     };
 
     poll();
-    const interval = setInterval(poll, 1000);
 
-    return () => clearInterval(interval);
+    let removeListener: (() => void) | undefined;
+    if (window.api && window.api.onProgress) {
+      removeListener = window.api.onProgress((updatedJob: JobStatus) => {
+        if (updatedJob.id === jobId) {
+          setStatus(updatedJob);
+        }
+      });
+    }
+
+    const interval = setInterval(poll, 2000);
+    return () => {
+      clearInterval(interval);
+      if (removeListener) removeListener();
+    };
   }, [open, jobId]);
 
   const handlePause = async () => {
     if (!jobId) return;
     setLoading(true);
     try {
-      await fetch(`http://localhost:4000/api/batch/pause/${jobId}`, {
-        method: "POST",
-      });
+      await api.batch.pause(jobId);
       toast.info("Pausing download...");
     } catch (e) {
       console.error(e);
@@ -89,9 +73,7 @@ export default function BatchProgress({
     if (!jobId) return;
     setLoading(true);
     try {
-      await fetch(`http://localhost:4000/api/batch/resume/${jobId}`, {
-        method: "POST",
-      });
+      await api.batch.resume(jobId);
       toast.success("Resuming download...");
     } catch (e) {
       console.error(e);
@@ -101,17 +83,26 @@ export default function BatchProgress({
     }
   };
 
-  const handleDownloadZip = () => {
+  const handleOpenFolder = () => {
     if (!jobId) return;
-    window.location.assign(`http://localhost:4000/api/batch/zip/${jobId}`);
-    toast.success("Download started!");
+    api.batch.openFolder(jobId);
+    toast.success("Opening folder...");
   };
 
   if (!status) return null;
 
   const percentage =
     status.progress.total > 0
-      ? Math.round((status.progress.completed / status.progress.total) * 100)
+      ? Math.min(
+          100,
+          ((status.progress.completed +
+            (status.status === "downloading" &&
+            status.progress.currentFilePercent
+              ? status.progress.currentFilePercent / 100
+              : 0)) /
+            status.progress.total) *
+            100
+        )
       : 0;
 
   return (
@@ -129,7 +120,7 @@ export default function BatchProgress({
         <div className="space-y-6 py-4">
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{percentage}%</span>
+              <span>{percentage.toFixed(1)}%</span>
               <div className="flex gap-2">
                 {status.progress.currentSpeed && (
                   <span className="font-mono text-xs text-blue-500">
@@ -149,14 +140,10 @@ export default function BatchProgress({
             </div>
           </div>
 
-          <div className="bg-muted p-3 rounded-md text-sm font-mono max-h-[100px] overflow-y-auto">
-            {status.error ? (
-              <div className="text-destructive flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" /> {status.error}
-              </div>
-            ) : status.status === "completed" ? (
-              <div className="text-green-500 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" /> Ready to Zip!
+          <div className="max-h-[200px] overflow-y-auto border rounded-md p-2 bg-muted/50">
+            {status.files.length === 0 ? (
+              <div className="text-center text-xs text-muted-foreground py-4">
+                Initializing...
               </div>
             ) : (
               <div className="flex flex-col gap-1">
@@ -223,8 +210,8 @@ export default function BatchProgress({
             )}
 
             {status.status === "completed" && (
-              <Button onClick={handleDownloadZip} className="w-full sm:w-auto">
-                <Download className="w-4 h-4 mr-2" /> Download ZIP
+              <Button onClick={handleOpenFolder} className="w-full sm:w-auto">
+                <FolderOpen className="w-4 h-4 mr-2" /> Open Folder
               </Button>
             )}
           </div>

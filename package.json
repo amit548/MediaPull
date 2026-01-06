@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "npm@10.9.2",
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix apps/server\" \"npm run dev --prefix apps/client\"",
-    "start": "concurrently \"npm run start --prefix apps/server\" \"npm run start --prefix apps/client\"",
-    "build": "npm run build --prefix apps/client && npm run build --prefix apps/server"
+    "dev": "concurrently \"npm run dev --prefix apps/client\" \"npm start --prefix apps/electron\"",
+    "build": "npm run build --prefix apps/client && npm run make --prefix apps/electron",
+    "lint": "npm run lint --prefix apps/client"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"

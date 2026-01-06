@@ -1,0 +1,45 @@
+{
+  "name": "electron",
+  "productName": "electron",
+  "version": "1.0.0",
+  "description": "My Electron application description",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc",
+    "prestart": "npm run build",
+    "start": "electron-forge start",
+    "prepackage": "npm run build",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "echo \"No linting configured\""
+  },
+  "keywords": [],
+  "author": {
+    "name": "Amit Mondal",
+    "email": "36206377+amit548@users.noreply.github.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^12.5.0",
+    "electron-squirrel-startup": "^1.0.1",
+    "youtube-dl-exec": "^3.0.28"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.10.2",
+    "@electron-forge/maker-deb": "^7.10.2",
+    "@electron-forge/maker-rpm": "^7.10.2",
+    "@electron-forge/maker-squirrel": "^7.10.2",
+    "@electron-forge/maker-zip": "^7.10.2",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.10.2",
+    "@electron-forge/plugin-fuses": "^7.10.2",
+    "@electron/fuses": "^1.8.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/electron": "^1.4.38",
+    "@types/electron-squirrel-startup": "^1.0.2",
+    "@types/node": "^25.0.3",
+    "electron": "39.2.7",
+    "typescript": "^5.9.3"
+  }
+}

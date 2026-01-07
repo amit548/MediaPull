@@ -23,6 +23,7 @@ export interface VideoData {
 export interface JobStatus {
   id: string;
   playlistName: string;
+  tempDir: string;
   status: "idle" | "downloading" | "paused" | "completed" | "error" | "zipping";
   error?: string;
   progress: {
@@ -37,6 +38,14 @@ export interface JobStatus {
   files: { filename: string; status: string }[];
 }
 
+export interface EngineStatusData {
+  status: "retrying" | "ready" | "error";
+  binary?: string;
+  count?: number;
+  max?: number;
+  message?: string;
+}
+
 export interface BatchInitPayload {
   urls: string[];
   titles: string[];
@@ -44,6 +53,7 @@ export interface BatchInitPayload {
   playlistName: string;
   addPrefix: boolean;
   concurrentFragments: number;
+  targetExt?: string;
 }
 
 export interface VideoService {
@@ -74,12 +84,19 @@ export interface IElectronAPI {
   deleteBatch: (id: string, deleteFiles: boolean) => Promise<void>;
   openBatchFolder: (id: string) => Promise<void>;
   openDownloadsFolder: () => Promise<void>;
+  relaunchApp: () => Promise<void>;
+  minimizeWindow: () => Promise<void>;
+  maximizeWindow: () => Promise<void>;
+  closeWindow: () => Promise<void>;
+  isMaximized: () => Promise<boolean>;
+  platform: string;
   saveCookies: (content: string) => Promise<void>;
   updateEngine: () => Promise<string>;
   saveSetting: (key: string, val: string) => Promise<void>;
   getSetting: (key: string) => Promise<string | undefined>;
   videoInfo: (url: string) => Promise<VideoData>;
   onProgress: (callback: (data: JobStatus) => void) => () => void;
+  onEngineStatus: (callback: (data: EngineStatusData) => void) => () => void;
 }
 
 declare global {
@@ -148,6 +165,37 @@ export const api = {
       return () => {};
     },
   },
+  app: {
+    relaunch: async () => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.relaunchApp();
+    },
+    minimize: async () => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.minimizeWindow();
+    },
+    maximize: async () => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.maximizeWindow();
+    },
+    close: async () => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.closeWindow();
+    },
+    isMaximized: async () => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.isMaximized();
+    },
+    getPlatform: () => {
+      const electronApi = getApi();
+      return electronApi?.platform || "web";
+    },
+  },
   settings: {
     saveCookies: async (content: string) => {
       const electronApi = getApi();
@@ -168,6 +216,13 @@ export const api = {
       const electronApi = getApi();
       if (!electronApi) throw new Error("IPC not available");
       return electronApi.updateEngine();
+    },
+  },
+  engine: {
+    onStatus: (cb: (data: EngineStatusData) => void) => {
+      const electronApi = getApi();
+      if (electronApi) return electronApi.onEngineStatus(cb);
+      return () => {};
     },
   },
 };

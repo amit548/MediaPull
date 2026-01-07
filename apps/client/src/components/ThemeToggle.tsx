@@ -18,7 +18,7 @@ export default function ThemeToggle() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
           className="hover:scale-110 active:scale-95 transition-transform"
         >

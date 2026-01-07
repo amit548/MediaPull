@@ -18,14 +18,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, Download, CheckSquare, X } from "lucide-react";
 import Image from "next/image";
-import { api, VideoData, VideoFormat } from "@/lib/api";
+import { api, VideoData, VideoFormat, EngineStatusData } from "@/lib/api";
 
-import ThemeToggle from "@/components/ThemeToggle";
-import SettingsDialog from "@/components/SettingsDialog";
+import { useSettings } from "@/contexts/SettingsContext";
 import BatchProgress from "@/components/BatchProgress";
-import { DownloadsDialog } from "@/components/DownloadsDialog";
+import { EngineStatus } from "@/components/EngineStatus";
+import { useEffect } from "react";
 
 export default function Home() {
+  const { addPrefix, concurrentFragments } = useSettings();
+
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<VideoData | null>(null);
   const [error, setError] = useState("");
@@ -41,11 +43,36 @@ export default function Home() {
   );
   const [bulkFormat, setBulkFormat] = useState("best");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
-  const [addPrefix, setAddPrefix] = useState(false);
-  const [concurrentFragments, setConcurrentFragments] = useState(4);
 
   const [batchJobId, setBatchJobId] = useState<string | null>(null);
   const [showBatchProgress, setShowBatchProgress] = useState(false);
+
+  const [engineError, setEngineError] = useState<{
+    binary: string;
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    return api.engine.onStatus((status: EngineStatusData) => {
+      if (status.status === "retrying") {
+        toast.info(status.message, {
+          description: status.count
+            ? `Attempt ${status.count} of ${status.max}`
+            : undefined,
+          id: "engine-status",
+        });
+      } else if (status.status === "ready") {
+        toast.dismiss("engine-status");
+        setEngineError(null);
+      } else if (status.status === "error") {
+        setEngineError({
+          binary: status.binary || "yt-dlp",
+          message: status.message || "Failed to launch engine",
+        });
+        toast.error("Downloader engine failed", { id: "engine-status" });
+      }
+    });
+  }, []);
 
   const handleSearch = async (url: string) => {
     setLoading(true);
@@ -104,7 +131,7 @@ export default function Home() {
     setSelectedVideoIds(new Set());
   };
 
-  const handleBulkDownload = async (format = "best") => {
+  const handleBulkDownload = async (format = "best", targetExt?: string) => {
     if (!data?.entries) return;
     const selectedEntries = data.entries.filter((e, idx) =>
       selectedVideoIds.has(e.id || String(idx))
@@ -119,6 +146,7 @@ export default function Home() {
         urls: selectedEntries.map((e) => e.url || e.webpage_url || ""),
         titles: selectedEntries.map((e) => e.title || ""),
         format: format,
+        targetExt,
         playlistName: data?.title || "mediapull_batch",
         addPrefix: addPrefix,
         concurrentFragments: concurrentFragments,
@@ -141,6 +169,7 @@ export default function Home() {
 
   const handleDownload = async (
     formatId: string,
+    targetExt?: string,
     urlOverride?: string,
     titleOverride?: string
   ) => {
@@ -154,6 +183,7 @@ export default function Home() {
         urls: [videoUrl],
         titles: [title],
         format: formatId,
+        targetExt,
         playlistName: title,
         folder: "",
         addPrefix: false,
@@ -173,22 +203,12 @@ export default function Home() {
   };
 
   return (
-    <main className="bg-background text-foreground py-12 px-4 transition-colors duration-300 relative animate-fade-in">
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <SettingsDialog
-          addPrefix={addPrefix}
-          setAddPrefix={setAddPrefix}
-          concurrentFragments={concurrentFragments}
-          setConcurrentFragments={setConcurrentFragments}
-        />
-        <DownloadsDialog />
-        <ThemeToggle />
-        <BatchProgress
-          jobId={batchJobId}
-          open={showBatchProgress}
-          onOpenChange={setShowBatchProgress}
-        />
-      </div>
+    <main className="bg-background text-foreground pt-24 pb-12 px-4 transition-colors duration-300 relative animate-fade-in">
+      <BatchProgress
+        jobId={batchJobId}
+        open={showBatchProgress}
+        onOpenChange={setShowBatchProgress}
+      />
       <div className="max-w-5xl mx-auto flex flex-col items-center">
         <h1 className="text-4xl md:text-6xl font-extrabold text-foreground mb-2 text-center">
           MediaPull
@@ -354,6 +374,7 @@ export default function Home() {
                               onClick={() =>
                                 handleDownload(
                                   "best",
+                                  undefined,
                                   entry.url || entry.webpage_url,
                                   entry.title
                                 )
@@ -388,9 +409,10 @@ export default function Home() {
                               <div className="pt-2 animate-fade-in">
                                 <FormatSelector
                                   formats={expandedVideoFormats}
-                                  onDownload={(fmt) =>
+                                  onDownload={(fmt, target) =>
                                     handleDownload(
                                       fmt,
+                                      target,
                                       entry.url || entry.webpage_url,
                                       entry.title
                                     )
@@ -409,12 +431,16 @@ export default function Home() {
             {!data.entries && data.formats && (
               <FormatSelector
                 formats={data.formats}
-                onDownload={(fmt) => handleDownload(fmt, undefined, data.title)}
+                onDownload={(fmt, target) =>
+                  handleDownload(fmt, target, undefined, data.title)
+                }
               />
             )}
           </div>
         )}
       </div>
+
+      <EngineStatus error={engineError} />
     </main>
   );
 }

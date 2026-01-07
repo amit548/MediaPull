@@ -142,22 +142,7 @@ export function DownloadsDialog() {
                       key={job.id}
                       className="border rounded-lg p-4 flex flex-col gap-2 relative group"
                     >
-                      <div className="absolute top-4 right-4 flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                          onClick={() => {
-                            setDeleteConfirmId(job.id);
-                            setDeleteData(false);
-                          }}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="flex justify-between items-start pr-10">
+                      <div className="flex justify-between items-start gap-4">
                         <div className="space-y-1">
                           <div className="font-semibold flex items-center gap-2">
                             <span
@@ -179,17 +164,33 @@ export function DownloadsDialog() {
                             ).toLocaleString()}
                           </div>
                         </div>
-                        <Badge
-                          variant={
-                            job.status === "completed"
-                              ? "default"
-                              : job.status === "error"
-                              ? "destructive"
-                              : "secondary"
-                          }
-                        >
-                          {job.status}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <Badge
+                            variant={
+                              job.status === "completed"
+                                ? "default"
+                                : job.status === "error"
+                                ? "destructive"
+                                : "secondary"
+                            }
+                          >
+                            {job.status}
+                          </Badge>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive p-0"
+                              onClick={() => {
+                                setDeleteConfirmId(job.id);
+                                setDeleteData(false);
+                              }}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="space-y-1">

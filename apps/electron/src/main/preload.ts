@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("batch:delete", id, deleteFiles),
   openBatchFolder: (id: string) => ipcRenderer.invoke("batch:openFolder", id),
   openDownloadsFolder: () => ipcRenderer.invoke("app:openDownloads"),
+  relaunchApp: () => ipcRenderer.invoke("app:relaunch"),
+  minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
+  maximizeWindow: () => ipcRenderer.invoke("window:maximize"),
+  closeWindow: () => ipcRenderer.invoke("window:close"),
+  isMaximized: () => ipcRenderer.invoke("window:isMaximized"),
+  platform: process.platform,
   saveCookies: (c: string) => ipcRenderer.invoke("settings:cookies", c),
   updateEngine: () => ipcRenderer.invoke("settings:updateEngine"),
   videoInfo: (u: string) => ipcRenderer.invoke("video:info", u),
@@ -21,6 +27,13 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.on("batch:progress", subscription);
     return () => {
       ipcRenderer.removeListener("batch:progress", subscription);
+    };
+  },
+  onEngineStatus: (cb: (data: any) => void) => {
+    const subscription = (_: any, d: any) => cb(d);
+    ipcRenderer.on("engine:status", subscription);
+    return () => {
+      ipcRenderer.removeListener("engine:status", subscription);
     };
   },
 });

@@ -28,7 +28,9 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem}
+    --radius: 0.5rem;
+  }
+
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
@@ -53,7 +55,31 @@
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%}
+    --chart-5: 340 75% 55%;
+  }
+
+  .oled {
+    /* Pure Black Backgrounds */
+    --background: 0 0% 0% !important;
+    --card: 0 0% 0% !important;
+    --popover: 0 0% 0% !important;
+
+    /* High-Contrast text (Forces white to prevent invisibility in light mode) */
+    --foreground: 0 0% 100% !important;
+    --card-foreground: 0 0% 100% !important;
+    --popover-foreground: 0 0% 100% !important;
+    --muted-foreground: 0 0% 75% !important;
+    --secondary-foreground: 0 0% 100% !important;
+    --accent-foreground: 0 0% 100% !important;
+
+    /* Structural Visibility */
+    --border: 0 0% 25% !important;
+    --input: 0 0% 25% !important;
+    --ring: 0 0% 100% !important;
+    --muted: 0 0% 10% !important;
+    --secondary: 0 0% 10% !important;
+    --accent: 0 0% 15% !important;
+  }
 }
 
 @layer base {
@@ -63,4 +89,32 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Window Dragging */
+.drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Custom Scrollbar for premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
 }

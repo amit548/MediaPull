@@ -18,6 +18,7 @@ export interface Job {
   id: string;
   playlistName: string;
   format: string;
+  targetExt?: string;
   concurrentFragments: number;
   addPrefix: boolean;
   tempDir: string;
@@ -63,6 +64,111 @@ function saveJob(job: Job) {
   }
 }
 
+async function spawnWithRetry(
+  command: string,
+  args: string[],
+  options: any = {},
+  win?: BrowserWindow,
+  retries = 5,
+  delay = 500
+): Promise<ChildProcess> {
+  const binaryName = path.basename(command);
+  for (let i = 0; i <= retries; i++) {
+    try {
+      if (!fs.existsSync(command)) {
+        throw new Error(`File not found: ${command}`);
+      }
+
+      if (process.platform === "win32") {
+        try {
+          const fd = fs.openSync(command, "r+");
+          fs.closeSync(fd);
+        } catch (err: any) {
+          if (err.code === "EBUSY" || err.code === "EACCES") {
+            if (win && !win.isDestroyed()) {
+              win.webContents.send("engine:status", {
+                status: "retrying",
+                binary: binaryName,
+                count: i + 1,
+                max: retries,
+                message: `System is busy. Retrying to launch ${binaryName}...`,
+              });
+            }
+            throw err;
+          }
+        }
+      }
+
+      const child = spawn(command, args, options);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("engine:status", { status: "ready" });
+      }
+      return child;
+    } catch (err: any) {
+      if ((err.code === "EBUSY" || err.code === "EACCES") && i < retries) {
+        console.warn(
+          `Spawn target busy/locked, retrying in ${delay}ms... (${i + 1}/${retries})`
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("engine:status", {
+          status: "error",
+          binary: binaryName,
+          message: `Failed to launch ${binaryName} after multiple attempts. This usually happens if an antivirus is scanning the file or it's locked by another process. Please try restarting the application.`,
+        });
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Failed to spawn ${command} after ${retries} retries`);
+}
+
+async function waitForEngine(
+  command: string,
+  win?: BrowserWindow,
+  timeout = 10000
+): Promise<void> {
+  const start = Date.now();
+  const binaryName = path.basename(command);
+
+  while (Date.now() - start < timeout) {
+    if (fs.existsSync(command)) {
+      try {
+        const fd = fs.openSync(command, "r+");
+        fs.closeSync(fd);
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("engine:status", { status: "ready" });
+        }
+        return;
+      } catch (err: any) {
+        if (err.code !== "EBUSY" && err.code !== "EACCES") {
+          throw err;
+        }
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("engine:status", {
+            status: "retrying",
+            binary: binaryName,
+            message: `Engine ${binaryName} is being prepared. Please wait...`,
+          });
+        }
+      }
+    } else {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("engine:status", {
+          status: "retrying",
+          binary: binaryName,
+          message: `Downloading engine binaries...`,
+        });
+      }
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error(`Engine preparation timed out for: ${command}`);
+}
+
 function getYtDlpPath() {
   const platform = process.platform;
   let binName = "yt-dlp";
@@ -70,6 +176,20 @@ function getYtDlpPath() {
     binName = "yt-dlp.exe";
   } else if (platform === "darwin") {
     binName = "yt-dlp_macos";
+  }
+
+  const binPath = app.isPackaged
+    ? path.join(process.resourcesPath, "bin", binName)
+    : path.join(app.getAppPath(), "bin", binName);
+
+  return binPath;
+}
+
+function getFfmpegPath() {
+  const platform = process.platform;
+  let binName = "ffmpeg";
+  if (platform === "win32") {
+    binName = "ffmpeg.exe";
   }
 
   const binPath = app.isPackaged
@@ -103,6 +223,8 @@ export async function processJob(win: BrowserWindow, jobId: string) {
 
   const binary = getYtDlpPath();
   const cookies = getCookiePath();
+
+  await waitForEngine(binary, win);
 
   if (!fs.existsSync(binary)) {
     console.error("yt-dlp binary not found at:", binary);
@@ -142,6 +264,10 @@ export async function processJob(win: BrowserWindow, jobId: string) {
 
     await new Promise<void>((resolve) => {
       const proxy = dbStore.getSettings("proxy");
+      const embedMetadata = dbStore.getSettings("embedMetadata") === "true";
+      const embedThumbnail = dbStore.getSettings("embedThumbnail") === "true";
+      const ffmpegPath = path.resolve(getFfmpegPath());
+      const ffmpegDir = path.dirname(ffmpegPath);
 
       const args = [
         file.url,
@@ -152,109 +278,209 @@ export async function processJob(win: BrowserWindow, jobId: string) {
         "--no-playlist",
         "--no-warnings",
       ];
+
+      if (fs.existsSync(ffmpegPath)) {
+        args.push("--ffmpeg-location", ffmpegDir);
+      }
+
       if (proxy) {
         args.push("--proxy", proxy);
       }
-      if (job!.format.includes("audio")) {
-        args.push("--extract-audio", "--audio-format", "mp3");
+      if (embedMetadata) {
+        args.push("--add-metadata");
       }
+
+      const supportedThumbnailFormats = [
+        "mp3",
+        "m4a",
+        "mp4",
+        "mkv",
+        "mka",
+        "ogg",
+        "opus",
+        "flac",
+        "mov",
+        "m4v",
+      ];
+      const targetExt = (job!.targetExt || "").toLowerCase();
+      const isSupportedThumbnail =
+        supportedThumbnailFormats.includes(targetExt);
+
+      if (embedThumbnail && isSupportedThumbnail) {
+        args.push("--embed-thumbnail");
+      } else if (embedThumbnail) {
+        console.warn(
+          `[${jobId}] Skipping thumbnail embedding for unsupported format: ${targetExt}`
+        );
+      }
+
+      const isAudioTarget = ["mp3", "flac", "wav", "m4a", "opus"].includes(
+        job!.targetExt || ""
+      );
+
+      if (isAudioTarget || job!.format.includes("audio")) {
+        args.push("--extract-audio");
+        args.push("--audio-format", job!.targetExt || "mp3");
+      } else if (job!.targetExt) {
+        args.push("--recode-video", job!.targetExt);
+      }
+
       if (cookies) {
         args.push("--cookies", cookies);
       }
 
       console.log(`[${jobId}] Spawning: yt-dlp ${args.join(" ")}`);
 
-      const child = spawn(binary, args);
-      activeProcesses.set(jobId, child);
+      spawnWithRetry(
+        binary,
+        args,
+        {
+          env: {
+            ...process.env,
+            PATH: `${ffmpegDir}${path.delimiter}${process.env.PATH || ""}`,
+          },
+        },
+        win
+      )
+        .then((child) => {
+          activeProcesses.set(jobId, child);
 
-      let stderrOutput = "";
-      child.stderr.on("data", (d) => {
-        const s = d.toString();
-        stderrOutput += s;
-        console.error(`[${jobId}] STDERR: ${s}`);
-      });
+          let stderrOutput = "";
+          if (child.stderr) {
+            child.stderr.on("data", (d) => {
+              const s = d.toString();
+              stderrOutput += s;
+              console.error(`[${jobId}] STDERR: ${s}`);
+            });
+          }
 
-      child.stdout.on("data", (d) => {
-        const line = d.toString();
+          if (child.stdout) {
+            child.stdout.on("data", (d) => {
+              const line = d.toString();
 
-        if (!line.trim().startsWith("[download]")) return;
+              if (!line.trim().startsWith("[download]")) return;
 
-        const percentMatch = line.match(/(\d+\.?\d*)%/);
-        if (percentMatch) {
-          job!.progress.currentFilePercent = parseFloat(percentMatch[1]);
-        }
-
-        const sizeMatch = line.match(
-          /of\s+(~?\s?\d+(\.\d+)?(KiB|MiB|GiB|TiB|B|kB|MB|GB|TB))/i
-        );
-        if (sizeMatch) {
-          job!.progress.currentFileTotalSize = sizeMatch[1];
-        }
-
-        const speedMatch = line.match(/at\s+([^\s]+)/);
-        if (speedMatch) {
-          job!.progress.currentSpeed = speedMatch[1];
-        }
-
-        if (percentMatch) {
-          win.webContents.send("batch:progress", job);
-        }
-      });
-
-      child.on("close", (code) => {
-        activeProcesses.delete(jobId);
-        if ((job as Job)?.status === "paused") {
-          resolve();
-          return;
-        }
-
-        console.log(`[${jobId}] Process exited with code ${code}`);
-
-        let downloadedFile: string | null = null;
-        try {
-          if (fs.existsSync(dlFilePath) && fs.statSync(dlFilePath).size > 0) {
-            downloadedFile = dlFilePath;
-          } else {
-            for (const ext of [".mkv", ".webm", ".mp4", ".mp3"]) {
-              const alt = path.join(incompleteDir, base + ext);
-              if (fs.existsSync(alt) && fs.statSync(alt).size > 0) {
-                downloadedFile = alt;
-                break;
+              const percentMatch = line.match(/(\d+\.?\d*)%/);
+              if (percentMatch) {
+                job!.progress.currentFilePercent = parseFloat(percentMatch[1]);
               }
+
+              const sizeMatch = line.match(
+                /of\s+(~?\s?\d+(\.\d+)?(KiB|MiB|GiB|TiB|B|kB|MB|GB|TB))/i
+              );
+              if (sizeMatch) {
+                job!.progress.currentFileTotalSize = sizeMatch[1];
+              }
+
+              const speedMatch = line.match(/at\s+([^\s]+)/);
+              if (speedMatch) {
+                job!.progress.currentSpeed = speedMatch[1];
+              }
+
+              if (percentMatch) {
+                win.webContents.send("batch:progress", job);
+              }
+            });
+          }
+
+          child.on("close", async (code: number | null) => {
+            activeProcesses.delete(jobId);
+            if ((job as Job)?.status === "paused") {
+              resolve();
+              return;
             }
-          }
-        } catch (e) {}
 
-        if (code === 0 || downloadedFile) {
-          if (code !== 0) {
-            console.warn(
-              `[${jobId}] Non-zero exit code (${code}) but file exists. Marking success.`
-            );
-          }
+            console.log(`[${jobId}] Process exited with code ${code}`);
 
-          if (downloadedFile) {
-            const fileName = path.basename(downloadedFile);
-            const destPath = path.join(job.tempDir, fileName);
+            let downloadedFile: string | null = null;
             try {
-              if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-              fs.renameSync(downloadedFile, destPath);
-            } catch (err: any) {
-              console.error(`[${jobId}] Failed to move file: ${err.message}`);
-            }
-          }
+              if (
+                fs.existsSync(dlFilePath) &&
+                fs.statSync(dlFilePath).size > 0
+              ) {
+                downloadedFile = dlFilePath;
+              } else {
+                const filesInIncomplete = fs.readdirSync(incompleteDir);
+                const matches = filesInIncomplete
+                  .filter(
+                    (f) =>
+                      f.startsWith(base) &&
+                      !f.endsWith(".part") &&
+                      !f.endsWith(".ytdl") &&
+                      fs.statSync(path.join(incompleteDir, f)).size > 0
+                  )
+                  .sort(
+                    (a, b) =>
+                      fs.statSync(path.join(incompleteDir, b)).mtimeMs -
+                      fs.statSync(path.join(incompleteDir, a)).mtimeMs
+                  );
 
-          file.status = "completed";
-          job!.progress.completed = i + 1;
-        } else {
-          console.error(
-            `[${jobId}] File failed to download. Stderr: ${stderrOutput}`
-          );
+                if (matches.length > 0) {
+                  downloadedFile = path.join(incompleteDir, matches[0]);
+                }
+              }
+            } catch (e) {}
+
+            if (code === 0 || downloadedFile) {
+              if (code !== 0) {
+                console.warn(
+                  `[${jobId}] Non-zero exit code (${code}) but file exists. Marking success.`
+                );
+              }
+
+              if (downloadedFile) {
+                const fileName = path.basename(downloadedFile);
+                const destPath = path.join(job.tempDir, fileName);
+
+                let moved = false;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                  try {
+                    if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+                    fs.renameSync(downloadedFile, destPath);
+                    moved = true;
+                    break;
+                  } catch (err: any) {
+                    console.warn(
+                      `[${jobId}] Move attempt ${attempt} failed: ${err.message}`
+                    );
+                    if (attempt < 3)
+                      await new Promise((r) => setTimeout(r, 1000));
+                  }
+                }
+
+                if (!moved) {
+                  console.error(
+                    `[${jobId}] Permanently failed to move file to ${destPath}`
+                  );
+                } else {
+                  try {
+                    const remaining = fs.readdirSync(incompleteDir);
+                    if (remaining.length === 0) {
+                      fs.rmdirSync(incompleteDir);
+                    }
+                  } catch {}
+                }
+              }
+
+              file.status = "completed";
+              job!.progress.completed = i + 1;
+            } else {
+              console.error(
+                `[${jobId}] File failed to download. Stderr: ${stderrOutput}`
+              );
+              file.status = "error";
+            }
+            win.webContents.send("batch:progress", job!);
+            saveJob(job!);
+            resolve();
+          });
+        })
+        .catch((err: Error) => {
+          console.error(`[${jobId}] Spawn failed:`, err);
           file.status = "error";
-        }
-        win.webContents.send("batch:progress", job!);
-        saveJob(job!);
-        resolve();
-      });
+          saveJob(job!);
+          resolve();
+        });
     });
 
     if ((job as Job).status === "paused") break;
@@ -323,6 +549,7 @@ export async function initBatch(data: any) {
     id,
     playlistName: data.playlistName ?? "batch",
     format: data.format ?? "best",
+    targetExt: data.targetExt,
     concurrentFragments: data.concurrentFragments ?? 4,
     addPrefix: !!data.addPrefix,
     tempDir,
@@ -462,38 +689,55 @@ export async function videoInfo(win: BrowserWindow, url: string) {
     args.push("--cookies", cookies);
   }
 
-  return new Promise((resolve, reject) => {
-    const child = spawn(binary, args);
-    let stdout = "";
-    let stderr = "";
+  return new Promise(async (resolve, reject) => {
+    try {
+      await waitForEngine(binary, win);
+      const child = await spawnWithRetry(binary, args, {}, win);
+      let stdout = "";
+      let stderr = "";
 
-    child.stdout.on("data", (d) => (stdout += d.toString()));
-    child.stderr.on("data", (d) => (stderr += d.toString()));
-
-    child.on("close", (code) => {
-      if (code === 0) {
-        try {
-          resolve(JSON.parse(stdout));
-        } catch (e) {
-          reject(new Error("Failed to parse JSON output from yt-dlp"));
-        }
-      } else {
-        reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`));
+      if (child.stdout) {
+        child.stdout.on("data", (d) => (stdout += d.toString()));
       }
-    });
+      if (child.stderr) {
+        child.stderr.on("data", (d) => (stderr += d.toString()));
+      }
+
+      child.on("close", (code) => {
+        if (code === 0) {
+          try {
+            resolve(JSON.parse(stdout));
+          } catch (e) {
+            reject(new Error("Failed to parse JSON output from yt-dlp"));
+          }
+        } else {
+          reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`));
+        }
+      });
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
 export async function updateEngine() {
   const binary = getYtDlpPath();
-  return new Promise((resolve, reject) => {
-    const child = spawn(binary, ["-U"]);
-    let output = "";
-    child.stdout.on("data", (d) => (output += d.toString()));
-    child.stderr.on("data", (d) => (output += d.toString()));
-    child.on("close", (code) => {
-      if (code === 0) resolve(output);
-      else reject(new Error(output || `Exited with code ${code}`));
-    });
+  return new Promise(async (resolve, reject) => {
+    try {
+      const child = await spawnWithRetry(binary, ["-U"]);
+      let output = "";
+      if (child.stdout) {
+        child.stdout.on("data", (d) => (output += d.toString()));
+      }
+      if (child.stderr) {
+        child.stderr.on("data", (d) => (output += d.toString()));
+      }
+      child.on("close", (code) => {
+        if (code === 0) resolve(output);
+        else reject(new Error(output || `Exited with code ${code}`));
+      });
+    } catch (e) {
+      reject(e);
+    }
   });
 }

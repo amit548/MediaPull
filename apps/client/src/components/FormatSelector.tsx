@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Download } from "lucide-react";
 
@@ -23,7 +24,7 @@ interface VideoFormat {
 
 interface FormatSelectorProps {
   formats: VideoFormat[];
-  onDownload: (formatId: string) => void;
+  onDownload: (formatId: string, targetExt?: string) => void;
 }
 
 export default function FormatSelector({
@@ -31,6 +32,7 @@ export default function FormatSelector({
   onDownload,
 }: FormatSelectorProps) {
   const [selectedFormat, setSelectedFormat] = useState<string | null>(null);
+  const [targetExt, setTargetExt] = useState<string>("auto");
 
   const usefulFormats = formats
     .filter((f) => f.vcodec !== "none" && f.ext !== "mhtml")
@@ -65,20 +67,49 @@ export default function FormatSelector({
       <CardContent className="space-y-6">
         <div className="grid grid-cols-2 gap-4">
           <Button
-            onClick={() => onDownload("best")}
+            onClick={() =>
+              onDownload("best", targetExt !== "auto" ? targetExt : undefined)
+            }
             className="w-full shadow-md hover:scale-105 transition-transform"
             size="lg"
           >
             Highest Quality
           </Button>
           <Button
-            onClick={() => onDownload("bestaudio")}
+            onClick={() =>
+              onDownload(
+                "bestaudio",
+                targetExt !== "auto" ? targetExt : undefined
+              )
+            }
             variant="secondary"
             className="w-full shadow-sm hover:scale-105 transition-transform"
             size="lg"
           >
             Audio Only
           </Button>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase font-semibold">
+            Target Container / Conversion
+          </Label>
+          <Select value={targetExt} onValueChange={setTargetExt}>
+            <SelectTrigger className="w-full h-9">
+              <SelectValue placeholder="Original Container" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Original / Auto</SelectItem>
+              <Separator className="my-1" />
+              <SelectItem value="mp4">Video: MP4 (Recommended)</SelectItem>
+              <SelectItem value="mkv">Video: MKV</SelectItem>
+              <SelectItem value="webm">Video: WebM</SelectItem>
+              <Separator className="my-1" />
+              <SelectItem value="mp3">Audio: MP3</SelectItem>
+              <SelectItem value="flac">Audio: FLAC</SelectItem>
+              <SelectItem value="wav">Audio: WAV</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="relative">
@@ -113,7 +144,12 @@ export default function FormatSelector({
 
           {selectedFormat && (
             <Button
-              onClick={() => onDownload(selectedFormat)}
+              onClick={() =>
+                onDownload(
+                  selectedFormat,
+                  targetExt !== "auto" ? targetExt : undefined
+                )
+              }
               className="w-full animate-in zoom-in-95 fade-in duration-300 gap-2"
               variant="default"
               size="lg"

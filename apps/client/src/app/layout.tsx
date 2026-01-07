@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Footer from "@/components/Footer";
 import { Providers } from "./providers";
+import { TitleBar } from "@/components/TitleBar";
 
 import "./globals.css";
 
@@ -33,6 +34,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col font-[family-name:var(--font-geist-sans)]`}
       >
         <Providers>
+          <TitleBar />
           <div className="flex-1 flex flex-col">{children}</div>
           <Toaster position="top-center" richColors />
         </Providers>

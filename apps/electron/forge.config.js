@@ -42,4 +42,10 @@ module.exports = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+  hooks: {
+    generateAssets: async () => {
+      const { main } = require("./scripts/download-bins");
+      await main();
+    },
+  },
 };

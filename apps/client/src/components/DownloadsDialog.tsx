@@ -116,7 +116,7 @@ export function DownloadsDialog() {
           <DialogHeader>
             <div className="flex justify-between items-center pr-8">
               <div>
-                <DialogTitle>Downloads History</DialogTitle>
+                <DialogTitle>Media History</DialogTitle>
                 <DialogDescription>Manage local downloads.</DialogDescription>
               </div>
               <Button

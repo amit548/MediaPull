@@ -37,7 +37,9 @@ export default function VideoInfo({ data }: VideoInfoProps) {
               <Image
                 src={
                   data.thumbnail ||
-                  `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`
+                  (data.id && data.id.length === 11
+                    ? `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`
+                    : "")
                 }
                 alt={data.title}
                 fill

@@ -141,6 +141,8 @@ export async function processJob(win: BrowserWindow, jobId: string) {
     const dlFilePath = path.join(incompleteDir, file.filename);
 
     await new Promise<void>((resolve) => {
+      const proxy = dbStore.getSettings("proxy");
+
       const args = [
         file.url,
         "-o",
@@ -150,6 +152,9 @@ export async function processJob(win: BrowserWindow, jobId: string) {
         "--no-playlist",
         "--no-warnings",
       ];
+      if (proxy) {
+        args.push("--proxy", proxy);
+      }
       if (job!.format.includes("audio")) {
         args.push("--extract-audio", "--audio-format", "mp3");
       }
@@ -435,9 +440,10 @@ export function saveCookies(content: string) {
   content.trim() ? fs.writeFileSync(p, content) : fs.rmSync(p, { force: true });
 }
 
-export async function videoInfo(url: string) {
+export async function videoInfo(win: BrowserWindow, url: string) {
   const binary = getYtDlpPath();
   const cookies = getCookiePath();
+  const proxy = dbStore.getSettings("proxy");
 
   const args = [
     url,
@@ -447,6 +453,10 @@ export async function videoInfo(url: string) {
     "--extractor-args",
     "youtubetab:skip=authcheck",
   ];
+
+  if (proxy) {
+    args.push("--proxy", proxy);
+  }
 
   if (cookies) {
     args.push("--cookies", cookies);
@@ -470,6 +480,20 @@ export async function videoInfo(url: string) {
       } else {
         reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`));
       }
+    });
+  });
+}
+
+export async function updateEngine() {
+  const binary = getYtDlpPath();
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, ["-U"]);
+    let output = "";
+    child.stdout.on("data", (d) => (output += d.toString()));
+    child.stderr.on("data", (d) => (output += d.toString()));
+    child.on("close", (code) => {
+      if (code === 0) resolve(output);
+      else reject(new Error(output || `Exited with code ${code}`));
     });
   });
 }

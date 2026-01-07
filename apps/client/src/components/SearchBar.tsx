@@ -22,7 +22,7 @@ export default function SearchBar({ onSearch, isLoading }: SearchBarProps) {
       <div className="flex w-full items-center space-x-2">
         <Input
           type="text"
-          placeholder="Paste YouTube Video or Playlist URL"
+          placeholder="Paste Video, Music, or Playlist URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           disabled={isLoading}

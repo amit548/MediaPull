@@ -33,6 +33,11 @@ export class JobDatabase {
         current_file_index INTEGER,
         files_json TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
     `);
 
     this.db.exec(
@@ -122,6 +127,21 @@ export class JobDatabase {
 
   deleteJob(id: string) {
     this.db.prepare("DELETE FROM jobs WHERE id = ?").run(id);
+  }
+
+  getSettings(key: string): string | undefined {
+    const row = this.db
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get(key) as { value: string } | undefined;
+    return row?.value;
+  }
+
+  saveSetting(key: string, value: string) {
+    this.db
+      .prepare(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+      )
+      .run(key, value);
   }
 
   private mapRowToJob(row: any): any {

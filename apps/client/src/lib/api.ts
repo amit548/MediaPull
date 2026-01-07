@@ -75,6 +75,9 @@ export interface IElectronAPI {
   openBatchFolder: (id: string) => Promise<void>;
   openDownloadsFolder: () => Promise<void>;
   saveCookies: (content: string) => Promise<void>;
+  updateEngine: () => Promise<string>;
+  saveSetting: (key: string, val: string) => Promise<void>;
+  getSetting: (key: string) => Promise<string | undefined>;
   videoInfo: (url: string) => Promise<VideoData>;
   onProgress: (callback: (data: JobStatus) => void) => () => void;
 }
@@ -150,6 +153,21 @@ export const api = {
       const electronApi = getApi();
       if (!electronApi) throw new Error("IPC not available");
       return electronApi.saveCookies(content);
+    },
+    save: async (key: string, val: string) => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.saveSetting(key, val);
+    },
+    get: async (key: string) => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.getSetting(key);
+    },
+    updateEngine: async () => {
+      const electronApi = getApi();
+      if (!electronApi) throw new Error("IPC not available");
+      return electronApi.updateEngine();
     },
   },
 };

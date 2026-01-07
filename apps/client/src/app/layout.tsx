@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "MediaPull",
-  description: "Premium YouTube Video & Playlist Downloader",
+  description: "Premium Universal Video & Playlist Downloader",
 };
 
 import { Toaster } from "@/components/ui/sonner";

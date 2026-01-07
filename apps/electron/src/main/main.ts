@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import path from "path";
 import squirrelStartup from "electron-squirrel-startup";
 import * as dl from "./services/downloader";
+import { dbStore } from "./services/Database";
 
 let mainWindow: BrowserWindow;
 
@@ -57,4 +58,7 @@ ipcMain.handle("batch:delete", (_, id, deleteFiles) =>
 ipcMain.handle("batch:openFolder", (_, id) => dl.openBatchFolder(id));
 ipcMain.handle("app:openDownloads", () => dl.openDownloadsFolder());
 ipcMain.handle("settings:cookies", (_, c) => dl.saveCookies(c));
-ipcMain.handle("video:info", (_, url) => dl.videoInfo(url));
+ipcMain.handle("settings:save", (_, key, val) => dbStore.saveSetting(key, val));
+ipcMain.handle("settings:get", (_, key) => dbStore.getSettings(key));
+ipcMain.handle("settings:updateEngine", () => dl.updateEngine());
+ipcMain.handle("video:info", (_, url) => dl.videoInfo(mainWindow, url));

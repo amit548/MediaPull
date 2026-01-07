@@ -35,16 +35,22 @@ export default function FormatSelector({
   const usefulFormats = formats
     .filter((f) => f.vcodec !== "none" && f.ext !== "mhtml")
     .sort((a, b) => {
-      const resA = parseInt(a.resolution?.split("x")[1] || "0") || 0;
-      const resB = parseInt(b.resolution?.split("x")[1] || "0") || 0;
-      return resB - resA;
+      const getRes = (res?: string) => {
+        if (!res) return 0;
+        if (res.includes("x")) {
+          return parseInt(res.split("x")[1]) || 0;
+        }
+        return parseInt(res) || 0;
+      };
+      return getRes(b.resolution) - getRes(a.resolution);
     });
 
   const uniqueFormats = usefulFormats.filter(
     (v, i, a) =>
       a.findIndex(
         (t) =>
-          (t.format_note === v.format_note || t.resolution === v.resolution) &&
+          t.format_note === v.format_note &&
+          t.resolution === v.resolution &&
           t.ext === v.ext
       ) === i
   );

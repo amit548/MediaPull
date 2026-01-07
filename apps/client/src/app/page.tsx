@@ -194,7 +194,7 @@ export default function Home() {
           MediaPull
         </h1>
         <p className="text-muted-foreground mb-10 text-lg text-center">
-          Premium YouTube Video & Playlist Downloader
+          Premium Universal Video & Playlist Downloader
         </p>
 
         <SearchBar onSearch={handleSearch} isLoading={loading} />

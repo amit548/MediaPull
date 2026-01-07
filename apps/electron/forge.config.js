@@ -7,6 +7,7 @@ module.exports = {
     name: "MediaPull",
     executableName: "MediaPull",
     extraResource: ["../../apps/client/out", "./bin"],
+    icon: "./assets/icon",
   },
   rebuildConfig: {},
   makers: [

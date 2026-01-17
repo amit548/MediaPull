@@ -44,17 +44,21 @@ export default function FormatSelector({
         }
         return parseInt(res) || 0;
       };
-      return getRes(b.resolution) - getRes(a.resolution);
+
+      const resDiff = getRes(b.resolution) - getRes(a.resolution);
+      if (resDiff !== 0) return resDiff;
+
+      // Secondary sort: Filesize descending
+      return (b.filesize || 0) - (a.filesize || 0);
     });
 
   const uniqueFormats = usefulFormats.filter(
     (v, i, a) =>
-      a.findIndex(
-        (t) =>
-          t.format_note === v.format_note &&
-          t.resolution === v.resolution &&
-          t.ext === v.ext
-      ) === i
+      a.findIndex((t) => {
+        const tLabel = t.resolution || t.format_note;
+        const vLabel = v.resolution || v.format_note;
+        return tLabel === vLabel && t.ext === v.ext;
+      }) === i,
   );
 
   return (
@@ -68,7 +72,10 @@ export default function FormatSelector({
         <div className="grid grid-cols-2 gap-4">
           <Button
             onClick={() =>
-              onDownload("best", targetExt !== "auto" ? targetExt : undefined)
+              onDownload(
+                "bestvideo+bestaudio/best",
+                targetExt !== "auto" ? targetExt : undefined,
+              )
             }
             className="w-full shadow-md hover:scale-105 transition-transform"
             size="lg"
@@ -79,7 +86,7 @@ export default function FormatSelector({
             onClick={() =>
               onDownload(
                 "bestaudio",
-                targetExt !== "auto" ? targetExt : undefined
+                targetExt !== "auto" ? targetExt : undefined,
               )
             }
             variant="secondary"
@@ -144,12 +151,29 @@ export default function FormatSelector({
 
           {selectedFormat && (
             <Button
-              onClick={() =>
+              onClick={() => {
+                const formatObj = uniqueFormats.find(
+                  (f) => f.format_id === selectedFormat,
+                );
+                let finalFormat = selectedFormat;
+
+                // If video-only, explicitly merge audio
+                if (
+                  formatObj &&
+                  formatObj.vcodec !== "none" &&
+                  formatObj.acodec === "none"
+                ) {
+                  finalFormat = `${selectedFormat}+bestaudio`;
+                }
+
+                // Append fallback to ensure it "never breaks"
+                finalFormat += "/bestvideo+bestaudio/best";
+
                 onDownload(
-                  selectedFormat,
-                  targetExt !== "auto" ? targetExt : undefined
-                )
-              }
+                  finalFormat,
+                  targetExt !== "auto" ? targetExt : undefined,
+                );
+              }}
               className="w-full animate-in zoom-in-95 fade-in duration-300 gap-2"
               variant="default"
               size="lg"

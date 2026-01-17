@@ -39,9 +39,9 @@ export default function Home() {
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
 
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
-  const [bulkFormat, setBulkFormat] = useState("best");
+  const [bulkFormat, setBulkFormat] = useState("bestvideo+bestaudio/best");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   const [batchJobId, setBatchJobId] = useState<string | null>(null);
@@ -131,10 +131,13 @@ export default function Home() {
     setSelectedVideoIds(new Set());
   };
 
-  const handleBulkDownload = async (format = "best", targetExt?: string) => {
+  const handleBulkDownload = async (
+    format = "bestvideo+bestaudio/best",
+    targetExt?: string,
+  ) => {
     if (!data?.entries) return;
     const selectedEntries = data.entries.filter((e, idx) =>
-      selectedVideoIds.has(e.id || String(idx))
+      selectedVideoIds.has(e.id || String(idx)),
     );
 
     if (selectedEntries.length === 0) return;
@@ -171,7 +174,7 @@ export default function Home() {
     formatId: string,
     targetExt?: string,
     urlOverride?: string,
-    titleOverride?: string
+    titleOverride?: string,
   ) => {
     const videoUrl = urlOverride || data?.webpage_url;
     if (!videoUrl) return;
@@ -272,7 +275,7 @@ export default function Home() {
                             <SelectValue placeholder="Quality" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="best">
+                            <SelectItem value="bestvideo+bestaudio/best">
                               Best Quality (Auto)
                             </SelectItem>
                             <SelectItem value="bestvideo[height<=2160]+bestaudio/best[height<=2160]">
@@ -373,10 +376,10 @@ export default function Home() {
                               className="flex-1 h-8 text-xs"
                               onClick={() =>
                                 handleDownload(
-                                  "best",
+                                  "bestvideo+bestaudio/best",
                                   undefined,
                                   entry.url || entry.webpage_url,
-                                  entry.title
+                                  entry.title,
                                 )
                               }
                             >
@@ -393,7 +396,7 @@ export default function Home() {
                               onClick={() =>
                                 handleFetchFormats(
                                   entry.url || entry.webpage_url || "",
-                                  entryId
+                                  entryId,
                                 )
                               }
                               disabled={loadingVideoId === entryId}
@@ -414,7 +417,7 @@ export default function Home() {
                                       fmt,
                                       target,
                                       entry.url || entry.webpage_url,
-                                      entry.title
+                                      entry.title,
                                     )
                                   }
                                 />

@@ -70,7 +70,7 @@ async function spawnWithRetry(
   options: any = {},
   win?: BrowserWindow,
   retries = 5,
-  delay = 500
+  delay = 500,
 ): Promise<ChildProcess> {
   const binaryName = path.basename(command);
   for (let i = 0; i <= retries; i++) {
@@ -107,7 +107,7 @@ async function spawnWithRetry(
     } catch (err: any) {
       if ((err.code === "EBUSY" || err.code === "EACCES") && i < retries) {
         console.warn(
-          `Spawn target busy/locked, retrying in ${delay}ms... (${i + 1}/${retries})`
+          `Spawn target busy/locked, retrying in ${delay}ms... (${i + 1}/${retries})`,
         );
         await new Promise((r) => setTimeout(r, delay));
         continue;
@@ -129,7 +129,7 @@ async function spawnWithRetry(
 async function waitForEngine(
   command: string,
   win?: BrowserWindow,
-  timeout = 10000
+  timeout = 10000,
 ): Promise<void> {
   const start = Date.now();
   const binaryName = path.basename(command);
@@ -262,6 +262,25 @@ export async function processJob(win: BrowserWindow, jobId: string) {
 
     const dlFilePath = path.join(incompleteDir, file.filename);
 
+    // Clean up any existing files that might be picked up as a successful download
+    try {
+      if (fs.existsSync(dlFilePath)) {
+        fs.unlinkSync(dlFilePath);
+      }
+
+      const filesInIncomplete = fs.readdirSync(incompleteDir);
+      filesInIncomplete.forEach((f) => {
+        if (f.startsWith(base) && (f === base || f.startsWith(base + "."))) {
+          const p = path.join(incompleteDir, f);
+          try {
+            fs.unlinkSync(p);
+          } catch {}
+        }
+      });
+    } catch (e) {
+      console.error(`[${jobId}] Failed to cleanup old files:`, e);
+    }
+
     await new Promise<void>((resolve) => {
       const proxy = dbStore.getSettings("proxy");
       const embedMetadata = dbStore.getSettings("embedMetadata") === "true";
@@ -274,7 +293,9 @@ export async function processJob(win: BrowserWindow, jobId: string) {
         "-o",
         dlFilePath,
         "--format",
-        job!.format.includes("audio") ? "bestaudio/best" : job!.format,
+        job!.format.includes("audio") && !job!.format.includes("video")
+          ? "bestaudio/best"
+          : job!.format,
         "--no-playlist",
         "--no-warnings",
       ];
@@ -310,19 +331,29 @@ export async function processJob(win: BrowserWindow, jobId: string) {
         args.push("--embed-thumbnail");
       } else if (embedThumbnail) {
         console.warn(
-          `[${jobId}] Skipping thumbnail embedding for unsupported format: ${targetExt}`
+          `[${jobId}] Skipping thumbnail embedding for unsupported format: ${targetExt}`,
         );
       }
 
       const isAudioTarget = ["mp3", "flac", "wav", "m4a", "opus"].includes(
-        job!.targetExt || ""
+        job!.targetExt || "",
       );
 
-      if (isAudioTarget || job!.format.includes("audio")) {
+      const isExplicitAudioFormat =
+        job!.format === "bestaudio" ||
+        job!.format.startsWith("bestaudio/") ||
+        job!.format.startsWith("bestaudio+");
+
+      if (isAudioTarget || isExplicitAudioFormat) {
         args.push("--extract-audio");
         args.push("--audio-format", job!.targetExt || "mp3");
       } else if (job!.targetExt) {
         args.push("--recode-video", job!.targetExt);
+      } else {
+        // Default to mp4 container for video downloads if no specific format requested
+        if (!isExplicitAudioFormat) {
+          args.push("--merge-output-format", "mp4");
+        }
       }
 
       if (cookies) {
@@ -340,7 +371,7 @@ export async function processJob(win: BrowserWindow, jobId: string) {
             PATH: `${ffmpegDir}${path.delimiter}${process.env.PATH || ""}`,
           },
         },
-        win
+        win,
       )
         .then((child) => {
           activeProcesses.set(jobId, child);
@@ -366,7 +397,7 @@ export async function processJob(win: BrowserWindow, jobId: string) {
               }
 
               const sizeMatch = line.match(
-                /of\s+(~?\s?\d+(\.\d+)?(KiB|MiB|GiB|TiB|B|kB|MB|GB|TB))/i
+                /of\s+(~?\s?\d+(\.\d+)?(KiB|MiB|GiB|TiB|B|kB|MB|GB|TB))/i,
               );
               if (sizeMatch) {
                 job!.progress.currentFileTotalSize = sizeMatch[1];
@@ -404,15 +435,15 @@ export async function processJob(win: BrowserWindow, jobId: string) {
                 const matches = filesInIncomplete
                   .filter(
                     (f) =>
-                      f.startsWith(base) &&
+                      (f === base || f.startsWith(base + ".")) &&
                       !f.endsWith(".part") &&
                       !f.endsWith(".ytdl") &&
-                      fs.statSync(path.join(incompleteDir, f)).size > 0
+                      fs.statSync(path.join(incompleteDir, f)).size > 0,
                   )
                   .sort(
                     (a, b) =>
                       fs.statSync(path.join(incompleteDir, b)).mtimeMs -
-                      fs.statSync(path.join(incompleteDir, a)).mtimeMs
+                      fs.statSync(path.join(incompleteDir, a)).mtimeMs,
                   );
 
                 if (matches.length > 0) {
@@ -421,10 +452,13 @@ export async function processJob(win: BrowserWindow, jobId: string) {
               }
             } catch (e) {}
 
-            if (code === 0 || downloadedFile) {
+            if (
+              (code === 0 || downloadedFile) &&
+              !(code !== 0 && stderrOutput.includes("ERROR:"))
+            ) {
               if (code !== 0) {
                 console.warn(
-                  `[${jobId}] Non-zero exit code (${code}) but file exists. Marking success.`
+                  `[${jobId}] Non-zero exit code (${code}) but file exists. Marking success.`,
                 );
               }
 
@@ -441,7 +475,7 @@ export async function processJob(win: BrowserWindow, jobId: string) {
                     break;
                   } catch (err: any) {
                     console.warn(
-                      `[${jobId}] Move attempt ${attempt} failed: ${err.message}`
+                      `[${jobId}] Move attempt ${attempt} failed: ${err.message}`,
                     );
                     if (attempt < 3)
                       await new Promise((r) => setTimeout(r, 1000));
@@ -450,7 +484,7 @@ export async function processJob(win: BrowserWindow, jobId: string) {
 
                 if (!moved) {
                   console.error(
-                    `[${jobId}] Permanently failed to move file to ${destPath}`
+                    `[${jobId}] Permanently failed to move file to ${destPath}`,
                   );
                 } else {
                   try {
@@ -466,7 +500,7 @@ export async function processJob(win: BrowserWindow, jobId: string) {
               job!.progress.completed = i + 1;
             } else {
               console.error(
-                `[${jobId}] File failed to download. Stderr: ${stderrOutput}`
+                `[${jobId}] File failed to download. Stderr: ${stderrOutput}`,
               );
               file.status = "error";
             }
@@ -541,14 +575,17 @@ export async function initBatch(data: any) {
           filename: `${baseName}.${ext}`,
           status: "pending",
         } as JobFile;
-      })
+      }),
     );
   }
 
   const job: Job = {
     id,
     playlistName: data.playlistName ?? "batch",
-    format: data.format ?? "best",
+    format:
+      data.format === "best" || !data.format
+        ? "bestvideo+bestaudio/best"
+        : data.format,
     targetExt: data.targetExt,
     concurrentFragments: data.concurrentFragments ?? 4,
     addPrefix: !!data.addPrefix,
